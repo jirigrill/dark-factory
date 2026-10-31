@@ -304,7 +304,7 @@ The spec is target-agnostic. It was drafted against a reference target, [`vinyl-
   - branch protection and required-check sources
   - the kill-switch check and watchdog
   - the author allowlist and provider allowlist
-  - the deploy host deploy script
+  - the deploy script on the host
 - Enforced by CODEOWNERS on these paths plus a CI check that fails any agent PR touching them.
 
 #### 10b. Replay eval set
