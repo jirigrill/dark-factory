@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtimes and dependencies
+node_modules/
+.venv/
+__pycache__/
+
+# Local tooling
+*.log
+tmp/

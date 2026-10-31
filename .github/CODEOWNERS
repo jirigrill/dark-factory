@@ -1,0 +1,6 @@
+# Default owner for everything in the repository.
+* @jirigrill
+
+# Guardrail surface: agent permissions, CI, security policy.
+/.github/ @jirigrill
+/SECURITY.md @jirigrill
