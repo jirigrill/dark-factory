@@ -28,8 +28,8 @@ The spec is target-agnostic. It was drafted against a reference target, [`vinyl-
 - The tier is set by a classifier from the change (paths touched, diff content), not by the author or the agent's own claim.
 - Tiers:
   - **Low:** docs, CSS, copy, additive UI. Auto-merge once all checks are green.
-  - **Medium:** ordinary features. Auto-merge in phase 1.
-  - **High:** schema migrations, third-party API quota and rate-limit use, auth, deploy-related code. The owner approves; an agent approval never counts as the owner's.
+  - **Medium:** ordinary features. Auto-merge in phase 1. A medium issue that needs a material product or technical choice first goes through the spec stage (2a).
+  - **High:** schema migrations, third-party API quota and rate-limit use, auth, deploy-related code. The owner approves; an agent approval never counts as the owner's. Changes that touch these paths are routed to the spec stage (2a) before implementation.
 - Off-limits paths (10a) are never merged by the factory, whatever the tier.
 - The classifier rules and path lists are off-limits (10a).
 - **Enforcement (personal repo, no org features):**
@@ -38,13 +38,15 @@ The spec is target-agnostic. It was drafted against a reference target, [`vinyl-
   - "Require branches to be up to date before merging" is on, so every merge has run CI on the latest `main`.
 
 ### 2. Readiness: agent triage
-- The agent reads all open issues and scores them against a spec template (goal, acceptance criteria, out of scope, UI notes).
-- If criteria are inferable, the agent writes them into the issue, labels it `ready-for-agent`, and proceeds.
-  - In phase 0, and always for high tier, inferred criteria wait for the owner's 👍 reaction before building starts.
+- The agent reads all open issues and scores them against a spec template (goal, acceptance criteria, out of scope, UI notes). When `vision.md` or `roadmap.md` exist, it reads them first and uses them to judge fit (16).
+- If the issue is bounded and the criteria are inferable, the agent writes them into the issue, labels it `ready-for-agent`, and proceeds.
+  - In phase 0, inferred criteria wait for the owner's 👍 reaction before building starts; high-tier issues instead go through the spec stage (2a).
   - Every failed attempt is labeled `spec-defect` (the criteria were wrong) or `impl-defect` (the build was wrong) in telemetry (14).
-- **Frozen target:** acceptance criteria and holdout scenarios are fixed before building starts. Their hash goes into the PR; changing either one counts as a new attempt.
-- If criteria are ambiguous, the agent may build several prototypes and pick one.
-- `needs-info` plus questions only for product decisions that belong to the human.
+- If the issue needs a material product or technical decision, is likely more than a few hundred lines, spans systems, needs a migration, or touches auth/quota/deploy, the agent labels it `ready-for-spec` and stops. The spec stage (2a) runs before scenarios and implementation.
+- If `vision.md` or `roadmap.md` exist and the issue does not fit them, the agent labels it `wait-to-implement` and explains what would need to change. It is not built.
+- **Frozen target:** the acceptance criteria (from the issue or the approved `PRODUCT.md`), the approved spec and the holdout scenarios are fixed before building starts. Their hashes go into the PR; changing any of them counts as a new attempt.
+- If the criteria are clear but the UI approach is ambiguous, the agent may build several prototypes and pick one (3).
+- `needs-info` plus questions only for information that is missing and cannot be inferred. Product choices belong in the spec PR (2a), not in a `needs-info` thread.
 - The agent may create its own issues (bugs, refactors, follow-ups).
   - Label `agent-created`; max 3 open at once, max 3 created per day.
   - Depth limit 1: work on an agent-created issue can't create another agent-created issue.
@@ -52,6 +54,20 @@ The spec is target-agnostic. It was drafted against a reference target, [`vinyl-
   - Each body ends with a `source:` block (review finding, telemetry, seed data). Text quoted from third-party content stays marked as data, so it doesn't become trusted just because the agent is an allowlisted author (6).
   - Agent-created issues can't be `factory-change` issues or touch off-limits paths (10a).
   - Human-written issues take priority.
+
+#### 2a. Spec stage: checked-in specs, reviewed before implementation
+- Purpose: turn an ambiguous or high-tier issue into a product and technical contract the owner can review before scenarios are written or code is touched.
+- Trigger: triage labels the issue `ready-for-spec` (2), or the owner applies the label directly.
+- The spec agent runs in a fresh context, on a different model family from the builder. It reads the issue and comments, `vision.md` and `roadmap.md` (16), existing specs, and the codebase, then writes:
+  - `specs/<issue-slug>/PRODUCT.md`: goal, user-facing behavior, acceptance criteria, non-goals, open product questions.
+  - `specs/<issue-slug>/TECH.md`: approach, affected paths, alternatives considered, validation plan, migration and rollout notes, open technical questions.
+- The spec agent opens a spec PR. It does not implement the issue, does not apply `ready-for-agent` and does not close the issue.
+- The owner reviews and merges the spec PR. This is a product gate, not an implementation gate, so it stays owner-merged at every tier, including phase 1. A rejected spec goes back as PR comments or to `needs-info`; a rejected spec is not a failed implementation attempt.
+- **Freeze:** the criteria in `PRODUCT.md` are hashed when the spec PR merges; the holdout scenarios derived from them (4) are hashed when they are written. Both hashes go into the implementation PR (4b). Changing either after the build starts counts as a new attempt (2).
+- **Integrity:** the builder may read specs but cannot edit `PRODUCT.md` or `TECH.md`; both paths are off-limits (10a). If implementation shows the spec is wrong, the builder opens a `ready-for-human` issue and stops. It never aligns the spec to the code.
+- **Scenario input:** the scenario agent (4) derives holdout scenarios from the approved `PRODUCT.md`, not from the raw issue text. Newer owner comments override the spec only before the scenario hash is frozen; after that they are a new attempt (2). The scenario agent records which text it used.
+- **Owner load:** one spec PR replaces the separate criteria 👍 for high-tier work, not the owner's approval of the implementation PR (1a). If the owner keeps rewriting specs, that is a spec-quality signal for the digest (7), not a reason to remove the gate.
+- **Cost:** only issues that need a spec get one (2). Bounded issues still go straight to implementation; a spec PR for every issue would add a human gate the factory is trying to remove.
 
 ### 3. Prototype selection: fresh-context judge with screenshots
 - 2–3 prototypes maximum per ambiguous issue, only if the remaining daily request budget (8c) covers them; otherwise one.
@@ -72,7 +88,7 @@ The spec is target-agnostic. It was drafted against a reference target, [`vinyl-
   - the reviewer rejects tests that don't guard real behavior
 - **Test integrity:** a CI guard fails any builder PR that deletes an e2e test or adds `test.skip`, `test.fixme` or `test.only`, unless the acceptance criteria remove that behavior. The reviewer checks for weakened assertions.
 - Holdout scenarios in a private repo, `<target>-scenarios`:
-  - user-journey tests written by a separate scenario agent from the issue text, before building starts
+  - user-journey tests written by a separate scenario agent from the approved `PRODUCT.md` when one exists (2a), otherwise from the issue text, before building starts
   - the scenario agent runs on a different model family than the builder
   - **red first:** a new scenario must fail on current `main`; a scenario that passes immediately is rejected
 - **Holdout isolation (private repo):**
@@ -97,9 +113,10 @@ The spec is target-agnostic. It was drafted against a reference target, [`vinyl-
 - **Self-review before the PR:** after the builder's verification chain passes (4c), the builder runs a fresh-context subagent on its own diff and fixes what it finds.
 - **Reviewer = hunter + verifier:**
   - a bug hunter reads the diff against the whole repo and the acceptance criteria
-  - a verifier from a different model family than the hunter confirms each finding; only confirmed findings are posted
+  - a verifier from a different model family than the hunter confirms each finding; only confirmed findings are published
   - findings cover bugs and spec fit only; style, cleanup and diagnostics are dropped
   - each finding cites a file and line as evidence
+- Findings travel as the validated review artifact (4d): line-anchored to the annotated diff, schema-checked, then posted by the publish job. A finding that cannot be anchored goes in the top-level body.
 - **Severity:** each finding is tagged:
   - **Important:** blocks the merge until fixed or resolved with a reason
   - **Pre-existing:** a bug the PR didn't introduce; becomes an `agent-created` issue (within the cap in 2) and doesn't block
@@ -121,11 +138,12 @@ The spec is target-agnostic. It was drafted against a reference target, [`vinyl-
 #### 4b. PR template
 - `.github/pull_request_template.md` (off-limits, 10a) with these sections:
   - **Issue:** `Closes #`
+  - **Spec:** links to `PRODUCT.md` / `TECH.md` and their hashes when they exist (2a), otherwise "none"
   - **What changed**
   - **Testing:** commands run, e2e and scenario results, screenshots
   - **Risk:** tier (1a) and why
   - **How to revert:** `git revert <sha>`, plus migration notes if any
-  - **Provenance:** criteria hash, model ID per role, satisfaction, review rounds
+  - **Provenance:** spec, criteria and scenario hashes, model ID per role, satisfaction, review rounds
 - A CI check fails the PR if any section is empty.
 
 #### 4c. Builder verification skills
@@ -143,6 +161,21 @@ The spec is target-agnostic. It was drafted against a reference target, [`vinyl-
   - opencode ignores `allowed-tools` in a skill; tool limits go in the agent config.
 - These skills are checks on the builder's side only. The independent gates (4, 4a, 6) still decide whether a PR merges.
 - Phase 0 measures the requests each skill uses (8c); a skill that costs more than it catches is dropped.
+
+#### 4d. Review artifacts: immutable inputs, validated output, separate publish
+- The reviewer does not post to GitHub and does not work on the PR checkout. A trusted job prepares immutable inputs; the reviewer writes a structured verdict; a separate publish job validates it against the diff and posts it. This is defense in depth under the per-role Apps (6).
+- **Inputs**, prepared by the workflow, not the reviewer:
+  - annotated diff with `[OLD:n]` / `[NEW:n]` coordinates; every inline comment must cite a real annotation
+  - PR description and metadata
+  - spec context: `PRODUCT.md` and `TECH.md` when present (2a)
+  - follow-up context: earlier reviews, author replies, and the delta from the last reviewed head to the current head
+  - all of it is untrusted data. The reviewer never follows instructions in it, never executes PR code or contributor scripts, and never uses GitHub write APIs.
+- **Output:** `review.json` with `verdict` (`APPROVE` or `REJECT`), `body`, and line-anchored `comments` tagged with the 4a severity (`IMPORTANT` blocks, `PRE-EXISTING` does not). A validator checks the schema and every path, side and line against the annotated diff. A finding that has no valid annotation goes in `body`.
+- **Publish:** a separate job with `contents: read` and `pull-requests: write` only re-reads the PR, refuses if the base or head SHA moved since the review started, and posts the review at the reviewed head SHA. A stale review is discarded, never posted against a newer commit.
+- **Follow-ups:** after the first round, review only the delta plus the still-open findings; author replies are product decisions unless concrete correctness or security evidence overrides them. The 3-round cap (4a) still applies.
+- **Independence:** the reviewer is still the hunter + verifier pair on a different model family from the builder (4a). This decision changes how findings travel, not who produces them.
+- **Approval events:** the repository keeps "Allow GitHub Actions to create and approve pull requests" off. The published review is a `COMMENT` or `REQUEST_CHANGES` review plus the required `reviewer` check; a bot `APPROVE` never counts as the owner's approval (1a).
+- **Blast radius:** a compromised or prompt-injected reviewer can at worst write a bad `review.json`. It holds no write token and has no path to `main`; the publish job accepts only a validated artifact bound to an immutable SHA.
 
 ### 5. Environments: prod only
 - No staging. E2E runs in CI against a local server; deploy goes straight to the deploy host, then smoke test, auto-revert on failure.
@@ -294,6 +327,8 @@ The spec is target-agnostic. It was drafted against a reference target, [`vinyl-
   - workflow files, and every script, Makefile target or config they execute
   - the scenarios repo, its workflows and app installations
   - the test-integrity guard and the holdout-isolation instructions
+  - the review artifact schema, validator and publish job (4d)
+  - `vision.md`, `roadmap.md`, and approved `PRODUCT.md` / `TECH.md` specs (2a, 16)
   - judge, reviewer and scenario-agent prompts and skills, and `REVIEW.md` (4a)
   - skill permissions in `opencode.json` (4c)
   - the risk-tier classifier and its path lists (1a)
@@ -362,7 +397,9 @@ All through GitHub:
 
 ### 16. Product north star
 - Working assumption: `REQUIREMENTS.md`.
-- 🔍 **Standalone session:** properly define the requirements and close the gaps they leave in the other areas, before the factory starts.
+- The target repository also carries `vision.md` (what the product is for, non-goals) and `roadmap.md` (work areas, triage guidance). Triage reads both (2) and routes non-fitting issues to `wait-to-implement`. They are owner-written or owner-approved and off-limits to the factory (10a).
+- Per-issue product and technical decisions live in `PRODUCT.md` and `TECH.md`, reviewed in a spec PR (2a). They narrow this section but do not replace it.
+- 🔍 **Standalone session:** properly define the overarching requirements and close the gaps they leave in the other areas, before the factory starts.
 
 ### 17. Test DB
 - A committed minimal seed: about 20 real records from the target's public data source (for the reference target, videos from the seed channels). No synthetic edge-case rows.
@@ -401,15 +438,16 @@ All through GitHub:
 - Together with the build attestation (6), any merge can be traced back to its spec, models and gate results from git alone.
 
 ## Pipeline (per issue)
-1. **Triage**: check the issue's clarity, predict which files it touches, label it, and fill in acceptance criteria.
-2. **Scenario agent**: write the holdout scenarios from the issue text in the private scenarios repo, prove they fail on `main` (auto-merged there). Criteria and scenarios are frozen.
-3. **Builder**: implement on a branch, with no access to the scenarios repo. For UI ambiguity, build 2–3 prototypes. Run the verification chain (toolchain, `verify`, `design-check`, then self-review in a fresh context) before opening the PR (4c).
-4. **Judge**: fresh context, different model family; pick a prototype using code, screenshots and the rubric.
-5. **Reviewer**: fresh context, different model family; bug hunter plus verifier check spec fit, bugs, test quality and holdout isolation. At most 3 review-and-fix rounds (4a).
-6. **Satisfaction gate**: in the scenarios repo, run hard checks once and judged scenarios N times; merge needs all hard checks green and satisfaction ≥ threshold (4).
-7. **Merge** (promoted tiers only; others stop at an open PR): classify the risk tier (1a) and post `tier-gate`; high waits for the owner's approval on the head SHA. Rebase, required checks green, serialized merge by the merger workflow with provenance trailers (21).
-8. **Deploy**: run `app-deploy` (verify attestation, backup, swap, health check, smoke test and prod scenarios, auto-rollback).
-9. **Report**: issue comment, daily digest, and Telegram for urgent events.
+1. **Triage**: read the issue against `vision.md` and `roadmap.md`, predict which files it touches, and route it to `ready-for-agent`, `ready-for-spec`, `needs-info` or `wait-to-implement` (2). Bounded issues get acceptance criteria filled in.
+2. **Spec** (only when routed to `ready-for-spec`): the spec agent writes `PRODUCT.md` and `TECH.md` in a spec PR; the owner merges it; criteria and spec are frozen and hashed (2a).
+3. **Scenario agent**: write the holdout scenarios from the approved `PRODUCT.md` or the issue text in the private scenarios repo, prove they fail on `main` (auto-merged there). Criteria and scenarios are frozen.
+4. **Builder**: implement on a branch, with no access to the scenarios repo. For UI ambiguity, build 2–3 prototypes. Run the verification chain (toolchain, `verify`, `design-check`, then self-review in a fresh context) before opening the PR (4c).
+5. **Judge**: fresh context, different model family; pick a prototype using code, screenshots and the rubric.
+6. **Reviewer**: fresh context, different model family; bug hunter plus verifier check spec fit, bugs, test quality and holdout isolation. Findings travel as a validated artifact and are published against the reviewed SHA by a separate job (4a, 4d). At most 3 review-and-fix rounds (4a).
+7. **Satisfaction gate**: in the scenarios repo, run hard checks once and judged scenarios N times; merge needs all hard checks green and satisfaction ≥ threshold (4).
+8. **Merge** (promoted tiers only; others stop at an open PR): classify the risk tier (1a) and post `tier-gate`; high waits for the owner's approval on the head SHA. Rebase, required checks green, serialized merge by the merger workflow with provenance trailers (21).
+9. **Deploy**: run `app-deploy` (verify attestation, backup, swap, health check, smoke test and prod scenarios, auto-rollback).
+10. **Report**: issue comment, daily digest, and Telegram for urgent events.
 
 ## Open-source candidates
 Investigated 2026-10-29. Bar: maintained, several active contributors, hundreds of stars or more, works with opencode. "Match" is a rough estimate of how much of this spec a project covers.
@@ -480,9 +518,10 @@ Investigated 2026-10-29. Bar: maintained, several active contributors, hundreds 
 - oh-my-symphony: a `verify:` command per lane, run leases in SQLite.
 - Open SWE: rerun a flaky CI job only with evidence; review that learns from past feedback; approval for pushes that touch workflow files.
 - Archon: its sdlc workflows (intake, build queue, merge queue, discoveries) as a reference design.
+- Cloud Factory demo: the spec PR gate (2a), annotated-diff review artifacts with a validated `review.json` and a separate publish job (4d), and computer-use verification with video evidence (4). It stops at human merge and has a weaker security posture (tag-pinned Actions, no author allowlist); take the mechanics, not the trust model.
 
 ## Follow-up sessions and investigations
-- 🔍 Requirements: define them properly and close the gaps they leave in other areas (16).
+- 🔍 Requirements: define the overarching product requirements and roadmap and close the gaps they leave in other areas (16). Per-issue specs are covered by 2a.
 - 🔍 Telemetry store: standalone grilling session; candidates found (14).
 - 🔍 Provider router and fallback: candidates found (8c).
 - 🔍 Quota sharing with the tagging pipeline (19).
@@ -518,6 +557,10 @@ Investigated 2026-10-29. Bar: maintained, several active contributors, hundreds 
 - Anthropic, Building verification loops in Claude Code with skills (embedded and chained checks, encoding repeated corrections): https://claude.com/resources/articles/building-verification-loops-in-claude-code-with-skills
 - opencode Agent Skills (locations, `skill` tool, per-agent permissions): https://opencode.ai/docs/skills/
 - opencode GitHub, CLI, server and SDK docs: https://opencode.ai/docs/github/, https://opencode.ai/docs/cli/, https://opencode.ai/docs/server/, https://opencode.ai/docs/sdk/
+- Cloud Factory demo (spec PR stage, review artifacts, computer-use verification): https://github.com/warpdotdev-demos/cloud-factory-demo
+  - spec stage: https://github.com/warpdotdev-demos/cloud-factory-demo/blob/main/.agents/skills/spec/SKILL.md
+  - review artifacts: https://github.com/warpdotdev-demos/cloud-factory-demo/blob/main/.github/workflows/review-pull-requests.yml
+  - review skill: https://github.com/warpdotdev-demos/cloud-factory-demo/blob/main/.agents/skills/review-pr/SKILL.md
 - awesome-software-factories: https://github.com/varun1505/awesome-software-factories
 - ROBOCO, software factory practices from 12 open-source repos: https://roboco.io/en/posts/software-factory-best-practices-from-open-source/
 - Candidates: https://github.com/Agent-Field/SWE-AF, https://github.com/marcusquinn/aidevops, https://github.com/RunMaestro/Maestro, https://github.com/jonwiggins/optio, https://github.com/OrchestratorInc/agent-orchestrator, https://github.com/fabro-sh/fabro, https://github.com/doordash-oss/agentic-orchestrator, https://github.com/multica-ai/multica, https://github.com/cyrusagents/cyrus, https://github.com/pullfrog/pullfrog
