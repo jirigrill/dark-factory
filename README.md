@@ -18,15 +18,15 @@ The factory is not tied to any one application. The spec was drafted against a r
 
 - **Trust boundary:** full dark reached in phases. Phase 0 runs the whole pipeline but stops at an open PR; auto-merge is promoted per risk tier on measured owner agreement, and demoted on reverts.
 - **Risk tiers:** low (docs, copy, additive UI) merges first; medium (ordinary features) next; high (migrations, auth, quota use, deploy code) always needs the owner.
-- **Spec before code:** acceptance criteria are frozen and hashed before building; holdout scenarios live in a private repo the builder cannot read, and must fail on `main` before they count.
-- **Independent gates:** judge, reviewer and scenario agents run on a different model family and a fresh context from the builder; findings must be verified before they block.
+- **Spec before code:** an ambiguous or high-tier issue goes through a reviewed `PRODUCT.md` + `TECH.md` spec PR; criteria, spec and holdout scenarios are then frozen and hashed. Holdout scenarios live in a private repo the builder cannot read and must fail on `main` before they count.
+- **Independent gates:** judge, reviewer and scenario agents run on a different model family and a fresh context from the builder; findings must be verified before they block, and travel as a validated, line-anchored `review.json` posted by a separate job.
 - **Blast radius:** no SSH keys for agents, GitHub Apps per role with least privilege, branch protection pinned to check sources, attested binaries, automatic rollback and a kill switch the agents cannot turn back on.
 - **Cost:** runs on free-tier models and free public-repo Actions minutes; private minutes are budgeted and tracked.
 - **Self-improvement with guardrails:** the factory may change its own prompts and router, but workflow files, graders, thresholds, branch protection and the kill switch are off-limits.
 
 ## Open questions
 
-The spec tracks the unresolved ones: product requirements for the target app, telemetry store, provider router and fallback, quota sharing with other pipelines, and spikes for the builder engine and orchestrator.
+The spec tracks the unresolved ones: the target app's overarching requirements and roadmap, telemetry store, provider router and fallback, quota sharing with other pipelines, and spikes for the builder engine and orchestrator.
 
 ## Security
 
